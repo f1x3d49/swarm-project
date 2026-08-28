@@ -24,10 +24,15 @@ AGENT_LOCAL_MAVLINK_PORTS = {0: 6760, 1: 6770, 2: 6780}
 
 # UDP ports on the remote Mission Planner PC that each instance's MAVProxy
 # pushes telemetry/commands to (an --out target, not a listener here — so no
-# inbound firewall rule is needed on this machine). Substitute the actual
-# LAN IP of that PC when building the sim_vehicle.py launch command; see
-# docs/ARCHITECTURE.md.
+# inbound firewall rule is needed on this machine).
 MISSION_PLANNER_PORTS = {0: 14550, 1: 14551, 2: 14552}
+
+# LAN IP of the PC running Mission Planner (David's home network — this dev
+# machine is org-managed and can't have MP installed on it, see CLAUDE.md
+# "known environment traps"). Environment-specific and likely to change
+# (different network, different PC) — this is the one place to update it;
+# launch_sitl.py reads it from here to build the sim_vehicle.py commands.
+MISSION_PLANNER_HOST = "192.168.1.135"
 
 # Local UDP ports agents use to exchange StateEstimates with each other.
 # Stage-0 comms (perfect delivery): each agent unicasts to every other
