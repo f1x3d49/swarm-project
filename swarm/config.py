@@ -38,3 +38,37 @@ ARM_RETRY_INTERVAL_S = 2
 READY_TIMEOUT_S = 120
 
 RUN_DURATION_S = 120
+
+# MAVLink SET_POSITION_TARGET_LOCAL_NED type_mask: use velocity only, ignore
+# position, acceleration, yaw and yaw rate. Frame is MAV_FRAME_LOCAL_NED,
+# which is oriented North-East-Down regardless of the vehicle's own EKF
+# origin — so a velocity vector computed in swarm/agent.py's shared world
+# frame is valid to send as-is, with no origin-offset translation needed.
+VELOCITY_TYPE_MASK = 0b0000111111000111
+
+# --- Behaviors (week 2: docs/ARCHITECTURE.md §5) -------------------------
+# Neighbors farther than this are outside cohesion/alignment sensing range.
+NEIGHBOR_RADIUS_M = 30.0
+# Neighbors closer than this trigger the (soft, weighted) separation rule.
+SEPARATION_RADIUS_M = 5.0
+MAX_SPEED_MPS = 3.0
+
+W_SEPARATION = 3.0
+W_ALIGNMENT = 1.0
+W_COHESION = 1.0
+W_GROUP_OBJECTIVE = 1.5
+
+# Scripted group objective for week 2 (stands in for operator control until
+# week 4): a fixed waypoint in the shared NED frame, meters from the origin.
+GROUP_OBJECTIVE_TARGET_NED = (40.0, 40.0, 0.0)
+
+# --- Safety veto (docs/ARCHITECTURE.md §5) --------------------------------
+# Hard floor: closer than this and the arbiter overrides every behavior with
+# a direct repulsion command. Built now, before it's load-bearing, per
+# ARCHITECTURE.md — "the difference between a demo that fails safely and a
+# demo that fails memorably." Must stay tighter than SEPARATION_RADIUS_M so
+# the soft separation rule gets a chance to act first.
+MIN_SEPARATION_M = 2.0
+# Hard radius from the shared origin; crossing it overrides every behavior
+# with a direct return-to-origin command.
+GEOFENCE_RADIUS_M = 60.0

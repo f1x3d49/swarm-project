@@ -7,15 +7,20 @@ Week 1 scope: connect to its own SITL instance, arm and take off, then at
 LOOP_HZ read its own ground-truth position/velocity, broadcast it as a
 StateEstimate, and fold received peer estimates into a local world model of
 TrackedEntity objects that decay with age and get dropped once stale
-(CLAUDE.md invariants #1, #2, #6, #7, #8). No behaviors/velocity commands
-yet — that's swarm/behaviors.py and swarm/arbiter.py, week 2.
+(CLAUDE.md invariants #1, #2, #6, #7, #8).
+
+Week 2 scope: each tick, run the world model + own state through
+swarm/behaviors.py and swarm/arbiter.py to get a velocity command, send it
+as SET_POSITION_TARGET_LOCAL_NED in GUIDED mode (CLAUDE.md's control loop
+shape), and log per-tick metrics (order parameter, min neighbor distance,
+whether the safety veto fired) via swarm/metrics.py.
 """
 import argparse
 import time
 
 from pymavlink import mavutil
 
-from . import config, geo
+from . import arbiter, config, geo, metrics
 from .comms import Comms
 from .state import DetectedBy, Kind, Source, StateEstimate, TrackedEntity
 
@@ -151,8 +156,10 @@ def run(agent_id):
 
     comms = Comms(agent_id)
     origin = establish_origin(m, comms, agent_id)
+    logger = metrics.MetricsLogger(agent_id)
 
     world_model = {}  # entity_id -> TrackedEntity
+    my_state = None
     period = 1.0 / config.LOOP_HZ
     last_print = 0
     t_end = time.time() + config.RUN_DURATION_S
@@ -193,6 +200,21 @@ def run(agent_id):
             else:
                 entity.confidence = max(0.0, 1.0 - age / config.ENTITY_STALE_TIMEOUT_S)
 
+        veto_reason = None
+        if my_state is not None:
+            velocity, veto_reason = arbiter.arbitrate(world_model, my_state)
+            vn, ve, vd = velocity
+            m.mav.set_position_target_local_ned_send(
+                0, m.target_system, m.target_component,
+                mavutil.mavlink.MAV_FRAME_LOCAL_NED, config.VELOCITY_TYPE_MASK,
+                0, 0, 0, vn, ve, vd, 0, 0, 0, 0, 0)
+            if veto_reason:
+                log(agent_id, f"SAFETY VETO: {veto_reason}")
+
+            phi = metrics.order_parameter(my_state, world_model)
+            min_dist = metrics.min_neighbor_distance(my_state, world_model)
+            logger.log(phi, min_dist, veto_reason)
+
         if now - last_print > 1.0:
             summary = ", ".join(
                 f"{eid}: pos={e.state.position[:2]} age={e.age(now):.1f}s conf={e.confidence:.2f}"
@@ -203,6 +225,7 @@ def run(agent_id):
 
         time.sleep(max(0.0, period - (time.time() - tick_start)))
 
+    logger.close()
     comms.close()
     log(agent_id, "landing")
     m.set_mode("LAND")
