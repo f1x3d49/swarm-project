@@ -1,8 +1,9 @@
-"""Per-agent metrics: order parameter and min inter-agent distance.
+"""Per-agent metrics: order parameter, min inter-agent distance, λ₂.
 
 See CLAUDE.md §5. Each agent computes and logs these from its own world
-model only — there is no script anywhere that reads all agents' states to
-compute a "true" global figure (CLAUDE.md invariant #2). With perfect
+model (and, for λ₂, its own gossiped view of the neighbor graph — see
+swarm/graph.py) — there is no script anywhere that reads all agents' states
+to compute a "true" global figure (CLAUDE.md invariant #2). With perfect
 comms and full connectivity these local estimates agree with the global
 value; once comms degrade (week 5) they will honestly start to diverge,
 which is itself part of the resilience story.
@@ -52,14 +53,15 @@ class MetricsLogger:
         self.path = f"metrics_agent{agent_id}_{ts}.csv"
         self._file = open(self.path, "w", newline="")
         self._writer = csv.writer(self._file)
-        self._writer.writerow(["t", "phi", "min_neighbor_dist_m", "veto"])
+        self._writer.writerow(["t", "phi", "min_neighbor_dist_m", "lambda2", "veto"])
         self._t0 = time.time()
 
-    def log(self, phi, min_dist, veto_reason):
+    def log(self, phi, min_dist, lambda2, veto_reason):
         self._writer.writerow([
             round(time.time() - self._t0, 2),
             round(phi, 3),
             round(min_dist, 2) if min_dist is not None else "",
+            round(lambda2, 3),
             veto_reason or "",
         ])
         self._file.flush()

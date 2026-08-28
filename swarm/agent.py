@@ -14,13 +14,19 @@ swarm/behaviors.py and swarm/arbiter.py to get a velocity command, send it
 as SET_POSITION_TARGET_LOCAL_NED in GUIDED mode (CLAUDE.md's control loop
 shape), and log per-tick metrics (order parameter, min neighbor distance,
 whether the safety veto fired) via swarm/metrics.py.
+
+Week 3 scope: each state broadcast now also carries "hears" — the sender's
+own current set of heard peer ids — so every agent can locally reconstruct
+the whole swarm's neighbor graph from gossip alone (no global state read,
+invariant #2) and log its own estimate of algebraic connectivity (λ₂) via
+swarm/graph.py.
 """
 import argparse
 import time
 
 from pymavlink import mavutil
 
-from . import arbiter, config, geo, metrics
+from . import arbiter, config, geo, graph, metrics
 from .comms import Comms
 from .state import DetectedBy, Kind, Source, StateEstimate, TrackedEntity
 
@@ -159,6 +165,7 @@ def run(agent_id):
     logger = metrics.MetricsLogger(agent_id)
 
     world_model = {}  # entity_id -> TrackedEntity
+    heard_by = {}  # agent_id -> set(peer_ids that agent currently hears), from gossip
     my_state = None
     period = 1.0 / config.LOOP_HZ
     last_print = 0
@@ -174,7 +181,11 @@ def run(agent_id):
         if pos is not None:
             now = time.time()
             my_state = own_state_estimate(pos, now, origin)
-            comms.broadcast({"type": "state", "state": my_state.to_dict()})
+            comms.broadcast({
+                "type": "state",
+                "state": my_state.to_dict(),
+                "hears": list(world_model.keys()),
+            })
 
         for msg, rx_time in comms.receive():
             if msg.get("type") != "state":
@@ -189,6 +200,7 @@ def run(agent_id):
                 detected_by=DetectedBy.RADIO,
                 confidence=1.0,
             )
+            heard_by[peer_id] = set(msg.get("hears", []))
 
         now = time.time()
         for eid in list(world_model.keys()):
@@ -197,11 +209,14 @@ def run(agent_id):
             if age > config.ENTITY_STALE_TIMEOUT_S:
                 log(agent_id, f"dropping stale entity {eid} (age {age:.1f}s)")
                 del world_model[eid]
+                heard_by.pop(eid, None)
             else:
                 entity.confidence = max(0.0, 1.0 - age / config.ENTITY_STALE_TIMEOUT_S)
 
         veto_reason = None
         if my_state is not None:
+            heard_by[agent_id] = set(world_model.keys())
+
             velocity, veto_reason = arbiter.arbitrate(world_model, my_state)
             vn, ve, vd = velocity
             m.mav.set_position_target_local_ned_send(
@@ -213,7 +228,8 @@ def run(agent_id):
 
             phi = metrics.order_parameter(my_state, world_model)
             min_dist = metrics.min_neighbor_distance(my_state, world_model)
-            logger.log(phi, min_dist, veto_reason)
+            lambda2 = graph.algebraic_connectivity(heard_by, config.AGENT_IDS)
+            logger.log(phi, min_dist, lambda2, veto_reason)
 
         if now - last_print > 1.0:
             summary = ", ".join(
