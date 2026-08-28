@@ -58,13 +58,27 @@ requirement**, not a stretch goal. Nothing is demo-ready until it can be seen.
 
 ### Known environment traps
 
-- MAVProxy occupies **UDP 14550** by default. Use TCP ports instead:
-  **5760 / 5770 / 5780** for instances 0 / 1 / 2. Launch with `--no-mavproxy`
-  when driving SITL from scripts.
+- **A SITL instance's TCP port only serves one real client at a time**
+  (verified empirically: a second simultaneous connection accepts at the
+  socket level but silently receives no data). As of week 3, `swarm/agent.py`
+  does not connect to `SITL_PORTS` directly — see the next point.
+- **MAVProxy is required in front of each SITL instance, not `--no-mavproxy`
+  (superseded week 3).** Each instance's telemetry needs to reach both this
+  agent process and Mission Planner running on a separate PC (this dev
+  machine is locked down and can't have MP installed on it). MAVProxy's
+  `--out` fans one MAVLink stream out to both, and since both are outbound
+  pushes from this machine, no inbound firewall rule is ever needed. Launch
+  each instance as:
+  `sim_vehicle.py -v ArduCopter -I<n> -m "--daemon" --out=udp:127.0.0.1:<AGENT_LOCAL_MAVLINK_PORTS[n]> --out=udp:<GCS_PC_LAN_IP>:<MISSION_PLANNER_PORTS[n]>`
+  (ports from `swarm/config.py`; substitute the actual LAN IP of the PC
+  running Mission Planner — same home network, so no VPN/tunnel needed).
+  `swarm/agent.py` connects to its `AGENT_LOCAL_MAVLINK_PORTS` UDP relay
+  port, not `SITL_PORTS`, for both telemetry and commands.
 - MAVLink receive buffers go stale. Always drain to the newest message
   (the `latest()` helper) rather than reading the queue head.
-- **Always restart SITL between experiments.** Carried-over state silently
-  contaminates results. Never reuse a running instance to save time.
+- **Always restart SITL (and its MAVProxy) between experiments.**
+  Carried-over state silently contaminates results. Never reuse a running
+  instance to save time.
 
 ---
 

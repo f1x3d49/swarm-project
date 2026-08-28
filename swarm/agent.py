@@ -20,6 +20,14 @@ own current set of heard peer ids — so every agent can locally reconstruct
 the whole swarm's neighbor graph from gossip alone (no global state read,
 invariant #2) and log its own estimate of algebraic connectivity (λ₂) via
 swarm/graph.py.
+
+Week 3 also changes the connection prerequisite: each agent now connects to
+a local MAVProxy relay (config.AGENT_LOCAL_MAVLINK_PORTS) instead of the raw
+SITL TCP port (config.SITL_PORTS) directly. A SITL TCP port only serves one
+real client at a time (verified empirically), so MAVProxy sits in front of
+it, forwarding the same stream to this agent AND to Mission Planner on a
+remote PC — see docs/ARCHITECTURE.md for the exact launch command. This
+supersedes CLAUDE.md's older "--no-mavproxy" guidance for this project.
 """
 import argparse
 import time
@@ -46,13 +54,13 @@ def latest(m, msg_type):
 
 
 def connect(agent_id):
-    port = config.SITL_PORTS[agent_id]
-    m = mavutil.mavlink_connection(f"tcp:127.0.0.1:{port}")
+    port = config.AGENT_LOCAL_MAVLINK_PORTS[agent_id]
+    m = mavutil.mavlink_connection(f"udp:127.0.0.1:{port}")
     m.wait_heartbeat()
     m.mav.request_data_stream_send(
         m.target_system, m.target_component,
         mavutil.mavlink.MAV_DATA_STREAM_ALL, config.LOOP_HZ * 2, 1)
-    log(agent_id, f"connected on tcp:{port} (sys {m.target_system})")
+    log(agent_id, f"connected on udp:{port} via MAVProxy relay (sys {m.target_system})")
     return m
 
 

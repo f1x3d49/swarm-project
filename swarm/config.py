@@ -7,9 +7,27 @@ constant — see CLAUDE.md #6.
 # --- Agents -----------------------------------------------------------------
 AGENT_IDS = [0, 1, 2]
 
-# MAVLink TCP ports for the 3 SITL instances (CLAUDE.md known env trap: use
-# TCP, not the MAVProxy-default UDP 14550).
+# Raw MAVLink TCP port each SITL instance serves. Only one real client can
+# attach to this port at a time (verified empirically — a second TCP
+# connection accepts at the socket level but never receives data), so as of
+# week 3 nothing connects here directly. It's the --master target MAVProxy
+# uses; kept here as the single source of truth for the sim_vehicle.py launch
+# commands (see docs/ARCHITECTURE.md's Mission Planner section).
 SITL_PORTS = {0: 5760, 1: 5770, 2: 5780}
+
+# Local UDP relay port each agent.py process connects to instead of
+# SITL_PORTS directly (week 3 change — see CLAUDE.md "known environment
+# traps"). MAVProxy sits in front of each SITL instance now, fed by
+# --out=udp:127.0.0.1:<this port>, so it can fan the same MAVLink stream out
+# to a second consumer: Mission Planner on a remote PC, via MISSION_PLANNER_PORTS.
+AGENT_LOCAL_MAVLINK_PORTS = {0: 6760, 1: 6770, 2: 6780}
+
+# UDP ports on the remote Mission Planner PC that each instance's MAVProxy
+# pushes telemetry/commands to (an --out target, not a listener here — so no
+# inbound firewall rule is needed on this machine). Substitute the actual
+# LAN IP of that PC when building the sim_vehicle.py launch command; see
+# docs/ARCHITECTURE.md.
+MISSION_PLANNER_PORTS = {0: 14550, 1: 14551, 2: 14552}
 
 # Local UDP ports agents use to exchange StateEstimates with each other.
 # Stage-0 comms (perfect delivery): each agent unicasts to every other
