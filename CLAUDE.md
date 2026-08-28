@@ -194,8 +194,8 @@ available for comparison; do not build the swarm on it.
 
 ## 10. Open items
 
-- [ ] Demo date / deadline: _TBD — fill in_
-- [ ] Solo or team project: _TBD — fill in_
+- [x] Demo date / deadline: **2026-10-07**
+- [x] Solo or team project: **solo**
 - [ ] Choose visualization path (Gazebo vs Mission Planner multi-vehicle)
 - [ ] Choose flight controller (≥2 MB flash — see ARCHITECTURE.md §6)
 - [ ] Choose vehicle type (multirotor vs rover)
