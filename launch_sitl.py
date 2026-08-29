@@ -43,35 +43,51 @@ for agent_id in config.AGENT_IDS:
         f"--out=udp:127.0.0.1:{config.AGENT_LOCAL_MAVLINK_PORTS[agent_id]}",
         f"--out=udp:{config.MISSION_PLANNER_HOST}:{config.MISSION_PLANNER_PORTS[agent_id]}",
     ]
-    print(f"[launch_sitl] instance {agent_id}: {' '.join(cmd)}")
+    print(f"[launch_sitl] instance {agent_id}: {' '.join(cmd)}", flush=True)
 
     log_path = os.path.join(instance_dir, "sitl.log")
     log_file = open(log_path, "w")
     p = subprocess.Popen(cmd, cwd=instance_dir, stdout=log_file, stderr=subprocess.STDOUT,
                           preexec_fn=os.setsid)  # own process group, so we can kill all descendants
     procs[agent_id] = p
-    print(f"[launch_sitl] instance {agent_id} pid={p.pid}, log={log_path}")
+    print(f"[launch_sitl] instance {agent_id} pid={p.pid}, log={log_path}", flush=True)
 
 print("[launch_sitl] all instances launching. GPS/EKF position estimate "
       "typically takes 60-90s to settle before arming will succeed "
-      "(CLAUDE.md known trap) — wait before running launch_swarm.py.")
-print("[launch_sitl] Ctrl+C to stop all instances.")
+      "(CLAUDE.md known trap) — wait before running launch_swarm.py.", flush=True)
+print("[launch_sitl] Ctrl+C to stop all instances.", flush=True)
+
+
+def _killpg(pid, sig):
+    """A process's group can already be gone by the time we get here (it
+    exited on its own, or a sibling's kill already reaped it) — that's not
+    an error, so don't let it abort the rest of the cleanup loop.
+    """
+    try:
+        os.killpg(os.getpgid(pid), sig)
+    except (ProcessLookupError, PermissionError):
+        pass
+
 
 try:
     while any(p.poll() is None for p in procs.values()):
         time.sleep(1)
 except KeyboardInterrupt:
-    print("[launch_sitl] stopping all instances (and their MAVProxy/xterm children)...")
+    print("[launch_sitl] stopping all instances (and their MAVProxy/xterm children)...", flush=True)
     for agent_id, p in procs.items():
         if p.poll() is None:
-            os.killpg(os.getpgid(p.pid), signal.SIGTERM)
+            _killpg(p.pid, signal.SIGTERM)
     deadline = time.time() + 5
     for agent_id, p in procs.items():
         remaining = max(0.0, deadline - time.time())
         try:
             p.wait(timeout=remaining)
         except subprocess.TimeoutExpired:
-            os.killpg(os.getpgid(p.pid), signal.SIGKILL)
-            p.wait()
+            _killpg(p.pid, signal.SIGKILL)
+            try:
+                p.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                print(f"[launch_sitl] instance {agent_id} (pid={p.pid}) did not "
+                      "die even after SIGKILL — check manually", flush=True)
 
-print("[launch_sitl] done.")
+print("[launch_sitl] done.", flush=True)
