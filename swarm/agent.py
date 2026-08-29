@@ -28,14 +28,21 @@ real client at a time (verified empirically), so MAVProxy sits in front of
 it, forwarding the same stream to this agent AND to Mission Planner on a
 remote PC — see docs/ARCHITECTURE.md for the exact launch command. This
 supersedes CLAUDE.md's older "--no-mavproxy" guidance for this project.
+
+Week 4 scope: config.OPERATOR_AGENT_ID swaps group_objective for live human
+input from operator_control.py, via swarm/operator_link.py. Every other
+agent is unaffected — it's still an ordinary agent to its peers' world
+models, since comms broadcasts a StateEstimate either way (invariant #5).
 """
 import argparse
+import functools
 import time
 
 from pymavlink import mavutil
 
-from . import arbiter, config, geo, graph, metrics
+from . import arbiter, behaviors, config, geo, graph, metrics
 from .comms import Comms
+from .operator_link import OperatorLink
 from .state import DetectedBy, Kind, Source, StateEstimate, TrackedEntity
 
 
@@ -172,6 +179,11 @@ def run(agent_id):
     origin = establish_origin(m, comms, agent_id)
     logger = metrics.MetricsLogger(agent_id)
 
+    is_operator = agent_id == config.OPERATOR_AGENT_ID
+    operator_link = OperatorLink() if is_operator else None
+    if is_operator:
+        log(agent_id, "OPERATOR agent — reading live velocity from operator_control.py")
+
     world_model = {}  # entity_id -> TrackedEntity
     heard_by = {}  # agent_id -> set(peer_ids that agent currently hears), from gossip
     my_state = None
@@ -225,7 +237,15 @@ def run(agent_id):
         if my_state is not None:
             heard_by[agent_id] = set(world_model.keys())
 
-            velocity, veto_reason = arbiter.arbitrate(world_model, my_state)
+            behavior_fns = None
+            if is_operator:
+                commanded = operator_link.get_commanded_velocity(now)
+                behavior_fns = [
+                    behaviors.separation, behaviors.alignment, behaviors.cohesion,
+                    functools.partial(behaviors.operator_input, commanded_velocity=commanded),
+                ]
+
+            velocity, veto_reason = arbiter.arbitrate(world_model, my_state, behavior_fns)
             vn, ve, vd = velocity
             m.mav.set_position_target_local_ned_send(
                 0, m.target_system, m.target_component,
@@ -251,6 +271,8 @@ def run(agent_id):
 
     logger.close()
     comms.close()
+    if operator_link is not None:
+        operator_link.close()
     log(agent_id, "landing")
     m.set_mode("LAND")
 

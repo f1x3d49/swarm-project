@@ -58,9 +58,18 @@ def safety_veto(velocity, world_model, self_state):
     return velocity, None
 
 
-def arbitrate(world_model, self_state):
-    """Run every behavior, blend, saturate, veto. Returns (velocity, veto_reason)."""
-    outputs = [b(world_model, self_state) for b in behaviors.BEHAVIORS]
+def arbitrate(world_model, self_state, behavior_fns=None):
+    """Run every behavior, blend, saturate, veto. Returns (velocity, veto_reason).
+
+    behavior_fns defaults to behaviors.BEHAVIORS. Week 4: agent.py passes a
+    swapped-in list for config.OPERATOR_AGENT_ID (group_objective replaced
+    by a functools.partial-bound operator_input) — every function here is
+    still just called as fn(world_model, self_state), so the veto and
+    blend logic below don't need to know or care which agent this is.
+    """
+    if behavior_fns is None:
+        behavior_fns = behaviors.BEHAVIORS
+    outputs = [b(world_model, self_state) for b in behavior_fns]
     velocity = blend(outputs)
     velocity = saturate(velocity, config.MAX_SPEED_MPS)
     velocity, veto_reason = safety_veto(velocity, world_model, self_state)

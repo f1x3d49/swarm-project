@@ -89,8 +89,10 @@ def cohesion(world_model, self_state):
 
 
 def group_objective(world_model, self_state):
-    """Steer toward the scripted waypoint. Stands in for operator control
-    until week 4; ignores world_model like every other behavior signature.
+    """Steer toward the scripted waypoint. Every agent except
+    config.OPERATOR_AGENT_ID still uses this (week 4 replaces it with
+    operator_input for one agent only, not for the whole swarm); ignores
+    world_model like every other behavior signature.
     """
     tn, te, _td = config.GROUP_OBJECTIVE_TARGET_NED
     dn = tn - self_state.position[0]
@@ -99,6 +101,26 @@ def group_objective(world_model, self_state):
     if dist < 1e-6:
         return VELOCITY_ZERO, config.W_GROUP_OBJECTIVE
     return (dn / dist, de / dist, 0.0), config.W_GROUP_OBJECTIVE
+
+
+def operator_input(world_model, self_state, commanded_velocity):
+    """Week 4: replaces group_objective for config.OPERATOR_AGENT_ID only.
+
+    Unlike the other behaviors this takes a third argument — the latest
+    velocity from swarm/operator_link.py (a human at a keyboard) — since
+    it's live per-tick input, not static config like GROUP_OBJECTIVE_TARGET_NED.
+    swarm/agent.py adapts it to the 2-arg (world_model, self_state) calling
+    convention via functools.partial before handing it to the arbiter, so
+    this stays a pure function of exactly what it's given — no socket I/O
+    here, that lives in operator_link.py like every other I/O boundary.
+
+    Still just a vote like every other behavior: separation/alignment/
+    cohesion keep acting on this agent, so an operator flying toward a
+    neighbor still gets pushed back by MIN_SEPARATION same as anyone else.
+    """
+    if commanded_velocity == VELOCITY_ZERO:
+        return VELOCITY_ZERO, 0.0
+    return commanded_velocity, config.W_OPERATOR_INPUT
 
 
 BEHAVIORS = [separation, alignment, cohesion, group_objective]

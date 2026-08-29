@@ -44,6 +44,26 @@ COMMS_PORTS = {0: 14700, 1: 14701, 2: 14702}
 # authority in the swarm logic itself (CLAUDE.md invariant #5).
 ORIGIN_PROVIDER_ID = 0
 
+# Which agent a human operator flies (week 4: docs/ARCHITECTURE.md's
+# operator-control step). This agent swaps group_objective for live input
+# from operator_control.py (see swarm/behaviors.py's operator_input) but is
+# otherwise an ordinary agent — every peer still only ever sees a normal
+# StateEstimate broadcast from it (CLAUDE.md invariant #5: no leader
+# shortcut, no special-casing in peers' behavior code).
+OPERATOR_AGENT_ID = 1
+
+# Local UDP port operator_control.py sends commanded velocity to. Separate
+# from COMMS_PORTS (that's inter-agent gossip; this is a one-way human ->
+# operator-agent channel, never relayed to peers).
+OPERATOR_INPUT_PORT = 14800
+# If no fresh command arrives within this window, the operator behavior
+# reports zero velocity (hover) rather than the last-known command — a
+# crashed or closed operator_control.py must fail safe, not fly off on a
+# stale command. Tighter than ENTITY_STALE_TIMEOUT_S because this is live
+# human control, not gossip about a peer's position.
+OPERATOR_INPUT_STALE_TIMEOUT_S = 1.0
+W_OPERATOR_INPUT = 2.0
+
 # --- Timing -------------------------------------------------------------
 LOOP_HZ = 5
 PREARM_OK = 1 << 28  # bit 28 of SYS_STATUS sensor health = prearm checks passing
