@@ -10,9 +10,10 @@ which is itself part of the resilience story.
 """
 import csv
 import math
+import os
 import time
 
-from . import behaviors
+from . import behaviors, config
 from .state import Kind
 
 
@@ -50,7 +51,10 @@ def min_neighbor_distance(self_state, world_model):
 class MetricsLogger:
     def __init__(self, agent_id, timestamp=None):
         ts = timestamp or time.strftime("%H%M%S")
-        self.path = f"metrics_agent{agent_id}_{ts}.csv"
+        repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        out_dir = os.path.join(repo_root, config.METRICS_DIR)
+        os.makedirs(out_dir, exist_ok=True)
+        self.path = os.path.join(out_dir, f"metrics_agent{agent_id}_{ts}.csv")
         self._file = open(self.path, "w", newline="")
         self._writer = csv.writer(self._file)
         self._writer.writerow(["t", "phi", "min_neighbor_dist_m", "lambda2", "veto"])

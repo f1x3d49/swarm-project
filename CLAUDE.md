@@ -59,6 +59,10 @@ requirement**, not a stretch goal. Nothing is demo-ready until it can be seen.
 > to its instance's SERIAL0 (`SITL_PORTS`), and SERIAL1 pushes UDP straight
 > to Mission Planner (`MISSION_PLANNER_PORTS`) — no relay. `README.md` is the
 > reviewer's instructions; keep it accurate. Leave `main` unchanged.
+> Layout differs from `main` too: the historical root scripts and formation
+> data live in `archive/leader_follower/`, recorded metrics runs in
+> `results/<step>/`, and new runs write to `results/` (gitignored) instead of
+> the repo root.
 
 - Windows host running **WSL2 / Ubuntu 22.04**. All project work happens inside WSL.
 - **ArduPilot**, not PX4 — chosen for firmware consistency with the real hardware.

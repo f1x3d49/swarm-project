@@ -148,8 +148,8 @@ keeps it hovering in place.
 
 ## Reading the results
 
-Each controller writes `metrics_agent<id>_<HHMMSS>.csv` in the repo folder,
-computed only from that drone's own view of the world:
+Each controller writes `results\metrics_agent<id>_<HHMMSS>.csv`, computed
+only from that drone's own view of the world:
 
 | Column | Meaning |
 |---|---|
@@ -159,14 +159,22 @@ computed only from that drone's own view of the world:
 | `lambda2` | algebraic connectivity of the neighbor graph: 3.0 = all three linked, 0 = split apart |
 | `veto` | `MIN_SEPARATION` or `GEOFENCE` when the safety layer overrode the flocking that tick |
 
-`metrics_agent*_004553.csv` / `metrics_agent2_004554.csv` in the repo are a
-reference run recorded by the author with the operator flying drone 1: φ ends
-at about 0.99 for all three drones and λ₂ stays at 3.0.
+Your own runs land directly in `results\` (git ignores them). The subfolders
+are the author's recorded runs, grouped by the development step they were
+committed with:
+
+| Folder | Run |
+|---|---|
+| `week2_flocking` | Reynolds flocking toward the waypoint (no λ₂ column yet) |
+| `week3_lambda2` | Adds the gossiped neighbor graph and λ₂ |
+| `week3_mp_relay` | Same swarm, with telemetry relayed to a remote Mission Planner |
+| `week4_operator_first` | An earlier operator-control run |
+| `week4_operator_reference` | **Reference run** with the operator flying drone 1: φ ends at about 0.99 for all three drones and λ₂ stays at 3.0 |
 
 Quick plot (needs `python -m pip install matplotlib`):
 
 ```bat
-python -c "import csv,sys,matplotlib.pyplot as plt; [plt.plot([float(r['t']) for r in csv.DictReader(open(f))],[float(r['phi']) for r in csv.DictReader(open(f))],label=f) for f in sys.argv[1:]]; plt.xlabel('t (s)'); plt.ylabel('phi'); plt.legend(); plt.show()" metrics_agent0_004553.csv metrics_agent1_004553.csv metrics_agent2_004554.csv
+python -c "import csv,sys,matplotlib.pyplot as plt; [plt.plot([float(r['t']) for r in csv.DictReader(open(f))],[float(r['phi']) for r in csv.DictReader(open(f))],label=f) for f in sys.argv[1:]]; plt.xlabel('t (s)'); plt.ylabel('phi'); plt.legend(); plt.show()" results\week4_operator_reference\metrics_agent0_004553.csv results\week4_operator_reference\metrics_agent1_004553.csv results\week4_operator_reference\metrics_agent2_004554.csv
 ```
 
 ---
@@ -222,7 +230,7 @@ python -c "import csv,sys,matplotlib.pyplot as plt; [plt.plot([float(r['t']) for
 | `fetch_sitl.py` | One-time download of the Windows simulator |
 | `sitl_params/` | Extra simulator parameters (telemetry rates toward Mission Planner) |
 | `launch_sitl.py`, `launch_swarm.py`, `operator_control.py` | The three windows above |
-| `swarm/config.py` | Every port, gain, radius, and timeout |
+| `swarm/config.py` | Every port, gain, radius, timeout, and output folder |
 | `swarm/agent.py` | One drone's controller: connect, take off, 5 Hz sense → decide → act loop |
 | `swarm/state.py` | `StateEstimate` / `TrackedEntity`: positions always carry uncertainty, time, source, validity |
 | `swarm/comms.py` | Drone-to-drone messaging (currently perfect delivery over local UDP) |
@@ -230,7 +238,9 @@ python -c "import csv,sys,matplotlib.pyplot as plt; [plt.plot([float(r['t']) for
 | `swarm/arbiter.py` | Weighted blend, speed limit, safety veto |
 | `swarm/metrics.py`, `swarm/graph.py` | φ, min distance, λ₂, CSV logging |
 | `swarm/operator_link.py` | Keyboard → drone 1 channel (never seen by the other drones) |
-| `first_flight.py`, `swarm_takeoff.py`, `formation.py`, `live_view.py`, `notes.md`, `formation_*.csv` | An earlier leader–follower phase, kept for history. Linux-only; not part of this demo. |
+| `results/` | Metrics from your runs, plus the author's recorded runs in subfolders (see *Reading the results*) |
+| `docs/ARCHITECTURE.md` | Layer design, interfaces, and the roadmap |
+| `archive/leader_follower/` | The earlier leader–follower phase (scripts, notes, formation-error data), kept for history. Linux-only; not part of this demo. |
 
 ### How this differs from the `main` branch
 
