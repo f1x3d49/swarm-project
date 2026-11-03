@@ -67,13 +67,18 @@ requirement**, not a stretch goal. Nothing is demo-ready until it can be seen.
   agent process and Mission Planner running on a separate PC (this dev
   machine is locked down and can't have MP installed on it). MAVProxy's
   `--out` fans one MAVLink stream out to both, and since both are outbound
-  pushes from this machine, no inbound firewall rule is ever needed. Launch
-  each instance as:
-  `sim_vehicle.py -v ArduCopter -I<n> -m "--daemon" --out=udp:127.0.0.1:<AGENT_LOCAL_MAVLINK_PORTS[n]> --out=udp:<GCS_PC_LAN_IP>:<MISSION_PLANNER_PORTS[n]>`
-  (ports from `swarm/config.py`; substitute the actual LAN IP of the PC
-  running Mission Planner — same home network, so no VPN/tunnel needed).
+  pushes from this machine, no inbound firewall rule is ever needed.
+  **Launch with `python3 launch_sitl.py`**, which builds the per-instance
+  command from `swarm/config.py` — don't hand-type it. For reference, it runs:
+  `sim_vehicle.py -v ArduCopter -I<n> -m "--daemon" --out=udp:127.0.0.1:<AGENT_LOCAL_MAVLINK_PORTS[n]> --out=udp:<MISSION_PLANNER_HOST>:<MISSION_PLANNER_PORTS[n]>`
+  `MISSION_PLANNER_HOST` in `swarm/config.py` is the LAN IP of the PC running
+  Mission Planner (same home network, so no VPN/tunnel needed) — update it
+  there when the network or PC changes.
   `swarm/agent.py` connects to its `AGENT_LOCAL_MAVLINK_PORTS` UDP relay
   port, not `SITL_PORTS`, for both telemetry and commands.
+- **Tear SITL down with Ctrl+C on `launch_sitl.py`, not by killing the
+  `sim_vehicle.py` PID.** A bare kill leaves MAVProxy/xterm children orphaned;
+  the script kills whole process groups.
 - MAVLink receive buffers go stale. Always drain to the newest message
   (the `latest()` helper) rather than reading the queue head.
 - **Always restart SITL (and its MAVProxy) between experiments.**
@@ -143,17 +148,68 @@ Logged to CSV per run, one run per experiment:
 
 ## 7. Current state
 
-**Working:** SITL running 3 simultaneous instances. Scripted arm / takeoff /
-telemetry / land via pymavlink. Leader–follower formation script with live CSV
-logging of formation error.
+Last updated 2026-10-14. Last code commit: Week 4, 2026-08-29. Progress is
+measured against ARCHITECTURE.md §8's build order.
 
-**Known bug under investigation:** heading-dependent formation error traced to a
-rotation sign error in the body-frame offset calculation. A speed sweep
-(500 / 250 / 125 cm/s) ruled out velocity lag as the cause.
+### Running a demo
 
-**Next up:** `StateEstimate` / `TrackedEntity` types, agent class with a
-pluggable rule, then the degradable comms layer. Then Reynolds flocking with
-3 agents. Then operator control of one agent.
+Three terminals, from the repo root:
+
+1. `python3 launch_sitl.py` — 3 SITL instances, each with its MAVProxy relay.
+2. `python3 launch_swarm.py` — one `swarm.agent` process per agent; prints PIDs.
+3. `python3 operator_control.py` — W/A/S/D flies `OPERATOR_AGENT_ID` (agent 1),
+   `q` quits. No key held → hover; input stale > 1 s → operator agent hovers.
+
+Each agent writes `metrics_agent<id>_<HHMMSS>.csv` to the repo root.
+
+### Working (verified live in 3-agent SITL)
+
+- **`swarm/` package** (`state`, `comms`, `behaviors`, `arbiter`, `agent`,
+  `metrics`, `graph`, `operator_link`, `geo`, `config`). One OS process per agent.
+  Each agent has its own world model of `TrackedEntity`s that decay with age.
+- **Comms, stage 0:** perfect delivery over local UDP (`COMMS_PORTS`), each
+  agent unicasting to every other agent to simulate a broadcast. Broadcasts
+  also share the sender's "hears" set, so any agent can rebuild the neighbor
+  graph locally without reading global state.
+- **Reynolds flocking** (separation / alignment / cohesion) plus a scripted
+  group objective (waypoint `GROUP_OBJECTIVE_TARGET_NED`). φ climbs from ~0.33
+  to ~1.0 within 25 s.
+- **Arbiter + safety veto:** weighted blend, saturated to `MAX_SPEED_MPS`.
+  The hard `MIN_SEPARATION_M` floor and `GEOFENCE_RADIUS_M` override every
+  behavior.
+- **Metrics per agent, from its own world model only:** φ, min neighbor
+  distance, λ₂ (mutual links only), veto reason. λ₂ = 3.0 under perfect comms.
+- **Visualization:** Mission Planner multi-vehicle map on a separate PC, fed
+  by MAVProxy `--out` (see §3).
+- **Operator control (demo beat 1):** the operator agent takes its velocity
+  from a human and stays an ordinary neighbor to its peers. Verified: φ dips
+  to ~0.52 when the operator breaks away and recovers to ~0.95 as the others
+  follow through cohesion.
+
+### Demo beats — status
+
+| Beat | Status |
+|---|---|
+| Operator flies, swarm follows | Working |
+| Node killed, swarm heals | Partial — `kill -9 <pid>` from `launch_swarm.py` output works; world models drop the dead peer via staleness. No one-command trigger, no verified healing run. |
+| Packet loss dialed up live | **Not built** — `comms.py` has no loss/latency/range knobs yet |
+| Live φ overlay on screen | **Not built** — φ is only in the CSVs |
+
+### Not yet built (ARCHITECTURE.md §8 steps 6–9)
+
+- Comms degradation: loss, latency, range; scripted node kill (step 6).
+- Collision count in the metrics CSV (§5 lists it; not logged yet).
+- GPS noise model and separation sweep (step 7). Deferred until after the demo.
+- Real drone (step 9). Deferred until after the demo.
+
+### Dropped deliberately
+
+- **Leader–follower formation corner-discontinuity bug** (`formation.py`,
+  `notes.md`). The heading-rotation sign error itself was fixed. The leftover
+  corner transient wasn't pursued because Reynolds flocking replaces that
+  script entirely. Root scripts (`first_flight.py`, `swarm_takeoff.py`,
+  `formation.py`, `live_view.py`) are historical reference. Leave them untouched.
+- **Gazebo:** Mission Planner was chosen because it costs less to integrate.
 
 ---
 
@@ -209,8 +265,11 @@ available for comparison; do not build the swarm on it.
 ## 10. Open items
 
 - [x] Demo date / deadline: **2026-10-07**
+- [x] Record demo outcome: **the 2026-10-07 demo did not happen.** As of
+      2026-11-03 the goal is a handoff: `README.md` lets someone else run
+      the swarm and see the work for themselves.
 - [x] Solo or team project: **solo**
-- [ ] Choose visualization path (Gazebo vs Mission Planner multi-vehicle)
+- [x] Choose visualization path: **Mission Planner multi-vehicle map** (not Gazebo)
 - [ ] Choose flight controller (≥2 MB flash — see ARCHITECTURE.md §6)
 - [ ] Choose vehicle type (multirotor vs rover)
 - [ ] Source GPS module with integrated magnetometer
