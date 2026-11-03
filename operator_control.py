@@ -13,6 +13,7 @@ Diagonal combining isn't supported (last key wins) -- keep it simple.
 Usage: python3 operator_control.py
 """
 import json
+import os
 import select
 import socket
 import sys
@@ -31,6 +32,26 @@ DIRECTIONS = {
     "a": (0.0, -config.MAX_SPEED_MPS, "west"),
     "d": (0.0, config.MAX_SPEED_MPS, "east"),
 }
+
+
+def read_newest_key(fd, timeout):
+    """Newest key pressed within `timeout` seconds, lowercased, or None.
+
+    Drains everything pending: key auto-repeat outpaces SEND_HZ, and reading
+    one char per tick would build a backlog that keeps the drone flying long
+    after the key is released.
+    """
+    ready, _, _ = select.select([fd], [], [], timeout)
+    if not ready:
+        return None
+    key = None
+    while ready:
+        data = os.read(fd, 1024)
+        if not data:
+            break
+        key = chr(data[-1]).lower()
+        ready, _, _ = select.select([fd], [], [], 0)
+    return key
 
 
 def main():
@@ -52,9 +73,8 @@ def main():
         while True:
             tick_start = time.time()
 
-            ready, _, _ = select.select([sys.stdin], [], [], period)
-            if ready:
-                ch = sys.stdin.read(1)
+            ch = read_newest_key(fd, period)
+            if ch is not None:
                 if ch == "q":
                     break
                 if ch in DIRECTIONS:

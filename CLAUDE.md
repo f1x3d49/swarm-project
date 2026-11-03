@@ -148,8 +148,15 @@ Logged to CSV per run, one run per experiment:
 
 ## 7. Current state
 
-Last updated 2026-10-14. Last code commit: Week 4, 2026-08-29. Progress is
-measured against ARCHITECTURE.md §8's build order.
+Last updated 2026-11-03. Last swarm-logic commit: Week 4, 2026-08-29. Progress
+is measured against ARCHITECTURE.md §8's build order.
+
+**Branches.** `main` (this one) is the WSL development version described
+throughout this file. `handoff` is a copy converted to run natively on
+Windows with Mission Planner on the same PC (prebuilt Windows SITL, no
+MAVProxy), made for an outside reviewer — its own CLAUDE.md note and
+README.md describe the differences. Swarm logic is the same on both; keep
+Windows-specific changes off `main`.
 
 ### Running a demo
 
@@ -160,7 +167,9 @@ Three terminals, from the repo root:
 3. `python3 operator_control.py` — W/A/S/D flies `OPERATOR_AGENT_ID` (agent 1),
    `q` quits. No key held → hover; input stale > 1 s → operator agent hovers.
 
-Each agent writes `metrics_agent<id>_<HHMMSS>.csv` to the repo root.
+Each agent writes `results/metrics_agent<id>_<HHMMSS>.csv` (`METRICS_DIR`;
+gitignored). Recorded runs worth keeping live in `results/<step>/`.
+`README.md` is the how-to-run guide.
 
 ### Working (verified live in 3-agent SITL)
 
@@ -207,8 +216,9 @@ Each agent writes `metrics_agent<id>_<HHMMSS>.csv` to the repo root.
 - **Leader–follower formation corner-discontinuity bug** (`formation.py`,
   `notes.md`). The heading-rotation sign error itself was fixed. The leftover
   corner transient wasn't pursued because Reynolds flocking replaces that
-  script entirely. Root scripts (`first_flight.py`, `swarm_takeoff.py`,
-  `formation.py`, `live_view.py`) are historical reference. Leave them untouched.
+  script entirely. The scripts (`first_flight.py`, `swarm_takeoff.py`,
+  `formation.py`, `live_view.py`) and their data now live in
+  `archive/leader_follower/` as historical reference. Leave them untouched.
 - **Gazebo:** Mission Planner was chosen because it costs less to integrate.
 
 ---

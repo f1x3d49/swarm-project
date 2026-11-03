@@ -82,6 +82,11 @@ READY_TIMEOUT_S = 120
 
 RUN_DURATION_S = 120
 
+# Each agent writes metrics_agent<id>_<HHMMSS>.csv here (relative to the repo
+# root). New runs land at the top of this folder and are gitignored; curated
+# past runs live in its subfolders.
+METRICS_DIR = "results"
+
 # MAVLink SET_POSITION_TARGET_LOCAL_NED type_mask: use velocity only, ignore
 # position, acceleration, yaw and yaw rate. Frame is MAV_FRAME_LOCAL_NED,
 # which is oriented North-East-Down regardless of the vehicle's own EKF
