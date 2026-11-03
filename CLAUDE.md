@@ -51,6 +51,15 @@ requirement**, not a stretch goal. Nothing is demo-ready until it can be seen.
 
 ## 3. Environment
 
+> **`handoff` branch:** this branch is the copy given to an outside reviewer
+> who runs it **natively on Windows** with Mission Planner on the same PC.
+> The WSL / `sim_vehicle.py` / MAVProxy setup below describes `main`, not
+> this branch. Here, `fetch_sitl.py` downloads ArduPilot's prebuilt Windows
+> SITL and `launch_sitl.py` starts it directly: each agent connects over TCP
+> to its instance's SERIAL0 (`SITL_PORTS`), and SERIAL1 pushes UDP straight
+> to Mission Planner (`MISSION_PLANNER_PORTS`) — no relay. `README.md` is the
+> reviewer's instructions; keep it accurate. Leave `main` unchanged.
+
 - Windows host running **WSL2 / Ubuntu 22.04**. All project work happens inside WSL.
 - **ArduPilot**, not PX4 — chosen for firmware consistency with the real hardware.
 - Simulation: `sim_vehicle.py` (ArduPilot SITL), `pymavlink`, MAVProxy.

@@ -1,3 +1,4 @@
 __pycache__/
 *.pyc
 sitl_logs/
+sitl_bin/

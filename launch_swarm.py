@@ -5,12 +5,14 @@ it only starts and stops subprocesses. If you find yourself adding logic
 here that reads a vehicle's state or computes a command, that logic belongs
 in swarm/agent.py instead.
 
-Prerequisite: 3 SITL instances already running on the ports in
-swarm/config.py (CLAUDE.md: always restart SITL between experiments).
+Prerequisite: launch_sitl.py running (CLAUDE.md: always restart SITL
+between experiments). Agents retry their connection for
+config.CONNECT_TIMEOUT_S, so it's fine to start this right after it.
 
-Usage: python3 launch_swarm.py
+Usage: python launch_swarm.py
 Ctrl+C stops all agents. To test node death, kill one agent's PID directly
-(printed at startup) and watch the survivors' world-model logs.
+(printed at startup) — `taskkill /F /PID <pid>` on Windows, `kill -9 <pid>`
+on Linux — and watch the survivors' world-model logs.
 """
 import subprocess
 import sys
@@ -24,8 +26,9 @@ for agent_id in config.AGENT_IDS:
     procs[agent_id] = p
     print(f"[launch] agent {agent_id} pid={p.pid}")
 
-print("[launch] all agents started. Ctrl+C to stop all, "
-      "or `kill -9 <pid>` one to test node death.")
+kill_cmd = "taskkill /F /PID <pid>" if sys.platform == "win32" else "kill -9 <pid>"
+print(f"[launch] all agents started. Ctrl+C to stop all, "
+      f"or `{kill_cmd}` one to test node death.")
 
 try:
     while any(p.poll() is None for p in procs.values()):

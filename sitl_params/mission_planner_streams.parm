@@ -1,0 +1,10 @@
+# Telemetry rates (Hz) on SERIAL1, the simulator's Mission Planner port
+# (MAV2_* = second MAVLink channel). Set here so the map gets positions even
+# before Mission Planner requests a stream itself.
+MAV2_RAW_SENS 2
+MAV2_EXT_STAT 2
+MAV2_RC_CHAN 2
+MAV2_POSITION 4
+MAV2_EXTRA1 4
+MAV2_EXTRA2 4
+MAV2_EXTRA3 2

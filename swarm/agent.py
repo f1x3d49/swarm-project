@@ -21,13 +21,10 @@ the whole swarm's neighbor graph from gossip alone (no global state read,
 invariant #2) and log its own estimate of algebraic connectivity (λ₂) via
 swarm/graph.py.
 
-Week 3 also changes the connection prerequisite: each agent now connects to
-a local MAVProxy relay (config.AGENT_LOCAL_MAVLINK_PORTS) instead of the raw
-SITL TCP port (config.SITL_PORTS) directly. A SITL TCP port only serves one
-real client at a time (verified empirically), so MAVProxy sits in front of
-it, forwarding the same stream to this agent AND to Mission Planner on a
-remote PC — see docs/ARCHITECTURE.md for the exact launch command. This
-supersedes CLAUDE.md's older "--no-mavproxy" guidance for this project.
+Handoff branch (native Windows): each agent connects over TCP straight to
+its own SITL instance's SERIAL0 (config.SITL_PORTS). There is no MAVProxy
+relay; Mission Planner gets its own stream from the same instance's SERIAL1
+instead (see config.py and launch_sitl.py), so no port has two clients.
 
 Week 4 scope: config.OPERATOR_AGENT_ID swaps group_objective for live human
 input from operator_control.py, via swarm/operator_link.py. Every other
@@ -61,13 +58,27 @@ def latest(m, msg_type):
 
 
 def connect(agent_id):
-    port = config.AGENT_LOCAL_MAVLINK_PORTS[agent_id]
-    m = mavutil.mavlink_connection(f"udp:127.0.0.1:{port}")
+    """TCP straight to this agent's own SITL instance (SERIAL0). Retries with a
+    fresh socket each attempt — pymavlink's built-in retry reuses a socket
+    whose connect() failed, which Windows doesn't allow — so the agents can be
+    launched before the simulators finish starting.
+    """
+    port = config.SITL_PORTS[agent_id]
+    deadline = time.time() + config.CONNECT_TIMEOUT_S
+    while True:
+        try:
+            m = mavutil.mavlink_connection(f"tcp:127.0.0.1:{port}", retries=0)
+            break
+        except OSError:
+            if time.time() > deadline:
+                raise SystemExit(f"agent {agent_id}: no simulator on tcp:{port} "
+                                 f"after {config.CONNECT_TIMEOUT_S}s — is launch_sitl.py running?")
+            time.sleep(1)
     m.wait_heartbeat()
     m.mav.request_data_stream_send(
         m.target_system, m.target_component,
         mavutil.mavlink.MAV_DATA_STREAM_ALL, config.LOOP_HZ * 2, 1)
-    log(agent_id, f"connected on udp:{port} via MAVProxy relay (sys {m.target_system})")
+    log(agent_id, f"connected on tcp:{port} (sys {m.target_system})")
     return m
 
 

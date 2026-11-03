@@ -7,32 +7,47 @@ constant — see CLAUDE.md #6.
 # --- Agents -----------------------------------------------------------------
 AGENT_IDS = [0, 1, 2]
 
-# Raw MAVLink TCP port each SITL instance serves. Only one real client can
-# attach to this port at a time (verified empirically — a second TCP
-# connection accepts at the socket level but never receives data), so as of
-# week 3 nothing connects here directly. It's the --master target MAVProxy
-# uses; kept here as the single source of truth for the sim_vehicle.py launch
-# commands (see docs/ARCHITECTURE.md's Mission Planner section).
+# --- Simulator (handoff branch: native Windows, no WSL, no MAVProxy) -------
+# launch_sitl.py starts the ArduCopter SITL binary directly, one per agent.
+# Each instance exposes MAVLink on two serial ports, so the one-client-per-port
+# limit (CLAUDE.md "known environment traps") is met without a MAVProxy relay:
+#
+#   SERIAL0 -> TCP SITL_PORTS[n]: this agent's own connection (agent.py).
+#              The instance waits for a client here before it starts.
+#   SERIAL1 -> UDP push to MISSION_PLANNER_HOST:MISSION_PLANNER_PORTS[n], the
+#              same ports the MAVProxy --out used on main, so Mission Planner
+#              is set up the same way. Two-way: MP can still command.
 SITL_PORTS = {0: 5760, 1: 5770, 2: 5780}
 
-# Local UDP relay port each agent.py process connects to instead of
-# SITL_PORTS directly (week 3 change — see CLAUDE.md "known environment
-# traps"). MAVProxy sits in front of each SITL instance now, fed by
-# --out=udp:127.0.0.1:<this port>, so it can fan the same MAVLink stream out
-# to a second consumer: Mission Planner on a remote PC, via MISSION_PLANNER_PORTS.
-AGENT_LOCAL_MAVLINK_PORTS = {0: 6760, 1: 6770, 2: 6780}
-
-# UDP ports on the remote Mission Planner PC that each instance's MAVProxy
-# pushes telemetry/commands to (an --out target, not a listener here — so no
-# inbound firewall rule is needed on this machine).
+# Mission Planner runs on the same Windows PC as the simulators.
+MISSION_PLANNER_HOST = "127.0.0.1"
 MISSION_PLANNER_PORTS = {0: 14550, 1: 14551, 2: 14552}
 
-# LAN IP of the PC running Mission Planner (David's home network — this dev
-# machine is org-managed and can't have MP installed on it, see CLAUDE.md
-# "known environment traps"). Environment-specific and likely to change
-# (different network, different PC) — this is the one place to update it;
-# launch_sitl.py reads it from here to build the sim_vehicle.py commands.
-MISSION_PLANNER_HOST = "192.168.1.135"
+# Each instance gets its own MAVLink system id (n+1) so Mission Planner shows
+# three distinct vehicles rather than merging them.
+SITL_SYSIDS = {0: 1, 1: 2, 2: 3}
+
+# Where every instance starts: lat, lon, alt (m AMSL), heading. This is
+# ArduPilot's standard SITL home (CMAC, Canberra). All three start on the same
+# spot; the separation veto pushes them apart in the first seconds.
+SITL_HOME = "-35.363261,149.165230,584,353"
+
+# Windows simulator binary + its Cygwin DLLs + copter defaults, downloaded by
+# fetch_sitl.py into this folder (relative to the repo root).
+SITL_BIN_DIR = "sitl_bin"
+SITL_WINDOWS_EXE = "ArduCopter.elf"  # a Windows .exe despite the name (Cygwin build)
+SITL_DEFAULTS_FILE = "copter.parm"
+# Extra parameter defaults applied after copter.parm, kept in the repo:
+# telemetry rates on the Mission Planner port, so the map gets positions
+# even if Mission Planner never requests a stream itself.
+SITL_EXTRA_DEFAULTS = ["sitl_params/mission_planner_streams.parm"]
+# On Linux (only used to test this branch from WSL), launch_sitl.py falls back
+# to a locally built ArduPilot instead of the Windows binary.
+SITL_LINUX_BINARY = "~/ardupilot/build/sitl/bin/arducopter"
+
+# How long agent.py keeps retrying its TCP connection while the simulator
+# boots, so launch order and timing between terminals don't matter.
+CONNECT_TIMEOUT_S = 60
 
 # Local UDP ports agents use to exchange StateEstimates with each other.
 # Stage-0 comms (perfect delivery): each agent unicasts to every other
@@ -76,7 +91,11 @@ ENTITY_STALE_TIMEOUT_S = 5.0
 TAKEOFF_ALT_M = 10.0
 TAKEOFF_TIMEOUT_S = 60
 ARM_TIMEOUT_S = 5
-ARM_RETRIES = 8  # SITL commonly rejects arming for a few seconds after prearm goes green
+# SITL rejects arming ("Need Position Estimate") until its EKF has converged,
+# which takes ~60-90 s of simulated time. On this branch each simulator only
+# starts when its agent connects, so the agent itself has to sit through that
+# warm-up: 45 attempts at ~2-3 s each gives it about 2 minutes.
+ARM_RETRIES = 45
 ARM_RETRY_INTERVAL_S = 2
 READY_TIMEOUT_S = 120
 
